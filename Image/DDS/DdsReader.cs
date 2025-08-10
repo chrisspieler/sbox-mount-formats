@@ -5,6 +5,7 @@ namespace Duccsoft.Formats;
 
 public class DdsReader : IFileReader<DdsFile>
 {
+	public DdsFile ReadFromPath( string filePath ) => ReadFromBytes( File.ReadAllBytes( filePath ) );
 	public DdsFile ReadFromBytes( byte[] bytes )
 	{
 		using var reader = new BinaryReader( new MemoryStream( bytes ) );
