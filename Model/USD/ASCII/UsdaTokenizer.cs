@@ -51,12 +51,12 @@ internal class UsdaTokenizer
 					}
 					continue;
 				case TokenType.Label:
+					var nextChar = line[position];
 					// Alphanumeric characters continue a label.
-					if ( char.IsAsciiLetterOrDigit( line[position] ) ) { continue; }
+					if ( char.IsAsciiLetterOrDigit( nextChar ) ) { continue; }
 					
-					// Sometimes, there will be an attribute name with sections separate by colons or dots.
-					// Should this be a different type of token instead of part of the label?
-					if ( line[position] is ':' or '.' ) { continue; }
+					// Some special characters may be included in a label.
+					if ( nextChar is '_' or '-' or ':' or '.' ) { continue; }
 					
 					break;
 				case TokenType.LiteralInt:
