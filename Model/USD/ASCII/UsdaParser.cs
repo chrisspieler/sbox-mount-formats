@@ -41,6 +41,14 @@ public class UsdaParser( IReadOnlyList<Token> tokens, IReadOnlyList<string> line
 					Log.Info( $"Popping prim \"{primStack.Peek().Name}\"" );
 					primStack.Pop();
 					continue;
+				case TokenType.LiteralString:
+				case TokenType.LiteralFloat:
+				case TokenType.LiteralInt:
+				case TokenType.Comma:
+					// This is probably an array spanning multiple lines, so ignore this line.
+					// TODO: Remove this when I actually parse attribute values.
+					reader.SkipCurrentLine( skipMetadata: true );
+					continue;
 			}
 			
 			Assert.AreEqual( currentToken.Type, TokenType.Label, $"Expected prim specifier or type name, but got {currentToken.Type}!" );
