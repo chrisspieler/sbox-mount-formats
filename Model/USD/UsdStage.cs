@@ -1,4 +1,4 @@
-﻿namespace Duccsoft.Formats;
+﻿namespace Duccsoft.Formats.Usd;
 
 public class UsdStage : IModelResourceFile
 {

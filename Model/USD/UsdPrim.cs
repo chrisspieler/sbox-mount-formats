@@ -1,4 +1,4 @@
-﻿namespace Duccsoft.Formats;
+﻿namespace Duccsoft.Formats.Usd;
 
 /// <summary>
 /// The primary container object in USD. 
@@ -15,6 +15,7 @@ public class UsdPrim
 
 	public void AddAttribute( string typeName, bool isArray, string attributeName )
 	{
+		Log.Info( $"\tAdding {typeName}{(isArray ? "[]" : string.Empty)} attribute \"{attributeName}\"" );
 		Attributes[attributeName] = new UsdAttribute( typeName, isArray, attributeName );
 	}
 
