@@ -111,7 +111,7 @@ public class UsdaParser( IReadOnlyList<Token> tokens, IReadOnlyList<string> line
 		// popped from the stack.
 		Stack<UsdPrim> primStack = [];
 
-		var reader = new TokenReader( tokens, Lines );
+		var reader = new TokenReader( tokens );
 		while ( reader.Read() is { } currentToken )
 		{
 			Log.Info( $"({currentToken.Line + 1},{currentToken.Position + 1},{currentToken.Length + 1}) {currentToken.Type.ToString()}" );
@@ -186,13 +186,15 @@ public class UsdaParser( IReadOnlyList<Token> tokens, IReadOnlyList<string> line
 			}
 			
 			var attributeName = reader.ReadLabel();
-			string attributeValue = null;
+			object attributeValue = null;
 			
 			// If there's a '=' here, try to read the value after it.
 			if ( reader.Peek() is { Type: TokenType.OpBinaryAssign } )
 			{
 				reader.Read();
-				attributeValue = reader.ReadValueAsString();
+				attributeValue = isArray 
+					? reader.ReadValueArray( attributeType ) 
+					: reader.ReadValue( attributeType );
 			}
 
 			AddAttribute( attributeType, attributeRole, isArray, attributeName, attributeValue );
@@ -224,9 +226,9 @@ public class UsdaParser( IReadOnlyList<Token> tokens, IReadOnlyList<string> line
 			primStack.Push( prim );
 		}
 
-		void AddAttribute( AttributeType type, AttributeRole role, bool isArray, string name, string valueText )
+		void AddAttribute( AttributeType type, AttributeRole role, bool isArray, string name, object value )
 		{
-			primStack.Peek().AddAttribute( type, role, isArray, name, valueText );
+			primStack.Peek().AddAttribute( type, role, isArray, name, value );
 		}
 	}
 }

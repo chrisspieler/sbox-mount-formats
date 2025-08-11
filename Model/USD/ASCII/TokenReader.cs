@@ -1,11 +1,15 @@
 ﻿using System;
+using System.ComponentModel.DataAnnotations;
 using System.Text;
+using Sandbox.Diagnostics;
 
 namespace Duccsoft.Formats.Usd.Ascii;
 
-public class TokenReader( IReadOnlyList<Token> tokens, IReadOnlyList<string> lines )
+public class TokenReader( IReadOnlyList<Token> tokens )
 {
-	private readonly IReadOnlyList<string> _lines = lines;
+	private const string VectorNoStartParenthesisError = "Expected left parenthesis at start of vector.";
+	private const string VectorNoEndParenthesisError = "Expected right parenthesis at end of vector.";
+	private const string VectorNoCommaError = "Expected comma between vector components.";
 
 	/// <summary>
 	/// Determines the position of the cursor used to read the underlying set of tokens.
@@ -47,7 +51,108 @@ public class TokenReader( IReadOnlyList<Token> tokens, IReadOnlyList<string> lin
 	}
 
 	public string ReadLabel() => Read()?.Text;
-	public string ReadStringLiteral() => ReadLabel()?.Trim( '"');
+	public string ReadStringLiteral() => ReadLabel()?.Trim( '"' );
+
+	public int ReadIntLiteral()
+	{
+		if ( Read() is not { Type: TokenType.LiteralInt } intToken )
+			throw new Exception( "Expected int literal" );
+
+		return int.Parse( intToken.Text );
+	}
+	
+	public uint ReadUIntLiteral()
+	{
+		if ( Read() is not { Type: TokenType.LiteralInt } intToken )
+			throw new Exception( "Expected int literal" );
+
+		return uint.Parse( intToken.Text );
+	}
+
+	public float ReadFloatLiteral()
+	{
+		if ( Read() is not { Type: TokenType.LiteralFloat or TokenType.LiteralInt } floatToken )
+			throw new Exception( "Expected float literal" );
+		
+		return float.Parse( floatToken.Text );
+	}
+
+	public Vector3 ReadVector3()
+	{
+		Assert.True( Read() is { Type: TokenType.ParenLeft }, VectorNoStartParenthesisError );
+
+		var vector = Vector3.Zero;
+		
+		vector.x = ReadFloatLiteral();
+		Assert.True( Read() is { Type: TokenType.Comma }, VectorNoCommaError );
+		vector.y = ReadFloatLiteral();
+		Assert.True( Read() is { Type: TokenType.Comma }, VectorNoCommaError );
+		vector.z = ReadFloatLiteral();
+		
+		Assert.True( Read() is { Type: TokenType.ParenRight }, VectorNoEndParenthesisError );
+
+		return vector;
+	}
+	
+	public Vector2 ReadVector2()
+	{
+		Assert.True( Read() is { Type: TokenType.ParenLeft }, VectorNoStartParenthesisError );
+
+		var vector = Vector2.Zero;
+		
+		vector.x = ReadFloatLiteral();
+		Assert.True( Read() is { Type: TokenType.Comma }, VectorNoCommaError );
+		vector.y = ReadFloatLiteral();
+			
+		Assert.True( Read() is { Type: TokenType.ParenRight }, VectorNoEndParenthesisError );
+
+		return vector;
+	}
+	
+	public object ReadValue( AttributeType dataType )
+	{
+		return dataType switch
+		{
+			AttributeType.Bool => ReadIntLiteral(),
+			AttributeType.Int => ReadIntLiteral(),
+			AttributeType.Uint => ReadUIntLiteral(),
+			AttributeType.Float => ReadFloatLiteral(),
+			AttributeType.Float3 => ReadVector3(),
+			AttributeType.Float2 => ReadVector2(),
+			_ => ReadValueAsString()
+		};
+	}
+
+	public object ReadValueArray( AttributeType dataType )
+	{
+		return dataType switch
+		{
+			AttributeType.Int => ReadArray<int>().ToArray(),
+			AttributeType.Float => ReadArray<float>().ToArray(),
+			AttributeType.Float3 => ReadArray<Vector3>().ToArray(),
+			AttributeType.Float2 => ReadArray<Vector2>().ToArray(),
+			_ => ReadValueAsString()
+		};
+
+		IEnumerable<T> ReadArray<T>()
+		{
+			Assert.AreEqual( Read()!.Value.Type, TokenType.BracketLeft );
+
+			while ( Peek() is { Type: not TokenType.BracketRight } nextToken )
+			{
+				if ( nextToken.Type == TokenType.Comma )
+				{
+					Read();
+					continue;
+				}
+				
+				yield return (T)ReadValue( dataType );
+			}
+			// Read the right bracket.
+			Read();
+		}
+	}
+	
 	public string ReadValueAsString()
 	{
 		if ( Read() is not { } firstToken )

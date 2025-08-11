@@ -5,8 +5,6 @@
 /// </summary>
 public class UsdPrim
 {
-	public record UsdAttribute( AttributeType Type, AttributeRole Role, bool IsArray, string Name, string ValueText );
-	
 	public SdfSpecifier Specifier { get; set; }
 	public string Type { get; set; }
 	public string Name { get; set; }
@@ -14,10 +12,10 @@ public class UsdPrim
 	public Dictionary<string, UsdAttribute> Attributes { get; } = [];
 	public List<UsdPrim> Children { get; } = [];
 
-	public void AddAttribute( AttributeType type, AttributeRole role, bool isArray, string name, string valueText )
+	public void AddAttribute( AttributeType type, AttributeRole role, bool isArray, string name, object value )
 	{
-		Log.Info( $"\tAdding {(role == AttributeRole.None ? string.Empty : role + " ")}attribute {type.ToString()}{(isArray ? "[]" : string.Empty)} \"{name}\": {(valueText?.Length > 300 ? valueText.Substring(0, 300) + "..." : valueText)}" );
-		Attributes[name] = new UsdAttribute( type, role, isArray, name, valueText );
+		Log.Info( $"\tAdding {(role == AttributeRole.None ? string.Empty : role + " ")}attribute {type.ToString()}{(isArray ? "[]" : string.Empty)} \"{name}\": {(value?.ToString()?.Length > 300 ? value?.ToString()?.Substring(0, 300) + "..." : value)}" );
+		Attributes[name] = new UsdAttribute( type, role, isArray, name, value );
 	}
 
 	public void AddChild( UsdPrim child )

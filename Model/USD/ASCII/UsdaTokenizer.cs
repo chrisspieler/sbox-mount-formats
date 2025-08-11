@@ -63,16 +63,16 @@ internal class UsdaTokenizer
 					// Digits continue an int.
 					if ( char.IsDigit( line[position] ) ) { continue; }
 					
-					// A decimal 'promotes' the int to a float.
-					if ( line[position] == '.' )
+					// A decimal or exponent 'promotes' the int to a float.
+					if ( line[position] is '.' or 'e' )
 					{
 						tokenType = TokenType.LiteralFloat;
 						continue;
 					}
 					break;
 				case TokenType.LiteralFloat:
-					// Digits or 'e' continue a float.
-					if ( line[position] == 'e' || char.IsDigit( line[position] ) ) { continue; }
+					// Digits, 'e', or '-', continue a float.
+					if ( line[position] is 'e' or '-' || char.IsDigit( line[position] ) ) { continue; }
 					break;
 				case TokenType.Path:
 					// Paths only end with a right angle bracket.
@@ -116,7 +116,7 @@ internal class UsdaTokenizer
 		}
 
 		// If we were in the middle of a token, finish capturing it now.
-		if ( EndToken( -1 ) is { } lastToken ) { yield return lastToken; }
+		if ( EndToken() is { } lastToken ) { yield return lastToken; }
 		yield break;
 		
 		Token? StartToken( TokenType newType )
