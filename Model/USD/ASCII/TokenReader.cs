@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text;
 
 namespace Duccsoft.Formats.Usd.Ascii;
 
@@ -47,6 +48,40 @@ public class TokenReader( IReadOnlyList<Token> tokens, IReadOnlyList<string> lin
 
 	public string ReadLabel() => Read()?.Text;
 	public string ReadStringLiteral() => ReadLabel()?.Trim( '"');
+	public string ReadValueAsString()
+	{
+		if ( Read() is not { } firstToken )
+			return string.Empty;
+
+		return firstToken.Type switch
+		{
+			TokenType.BracketLeft => ReadArray(),
+			TokenType.ParenLeft => ReadTuple(),
+			_ => firstToken.Text
+		};
+
+		string ReadArray()
+		{
+			var sb = new StringBuilder();
+			while ( Read() is { } token )
+			{
+				sb.Append( token.Text );
+				if ( token.Type == TokenType.BracketRight ) { break; }
+			}
+			return sb.ToString();
+		}
+
+		string ReadTuple()
+		{
+			var sb = new StringBuilder();
+			while ( Read() is { } token )
+			{
+				sb.Append( token.Text );
+				if ( token.Type == TokenType.ParenRight ) { break; }
+			}
+			return sb.ToString();
+		}
+	}
 
 	public void SkipCurrentMetadata() => SkipScope( TokenType.ParenLeft, TokenType.ParenRight );
 	public void SkipCurrentPrim() => SkipScope( TokenType.BraceLeft, TokenType.BraceRight );

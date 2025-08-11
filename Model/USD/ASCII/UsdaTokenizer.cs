@@ -47,16 +47,16 @@ internal class UsdaTokenizer
 				case TokenType.LiteralString:
 					if ( line[position] == '"' )
 					{
-						if ( EndToken() is { } token ) { yield return token; }
+						if ( EndToken( 1 ) is { } token ) { yield return token; }
 					}
 					continue;
 				case TokenType.Label:
 					// Alphanumeric characters continue a label.
 					if ( char.IsAsciiLetterOrDigit( line[position] ) ) { continue; }
 					
-					// Sometimes, there will be an attribute name with sections separate by colons.
+					// Sometimes, there will be an attribute name with sections separate by colons or dots.
 					// Should this be a different type of token instead of part of the label?
-					if ( line[position] == ':' ) { continue; }
+					if ( line[position] is ':' or '.' ) { continue; }
 					
 					break;
 				case TokenType.LiteralInt:
@@ -74,6 +74,13 @@ internal class UsdaTokenizer
 					// Digits or 'e' continue a float.
 					if ( line[position] == 'e' || char.IsDigit( line[position] ) ) { continue; }
 					break;
+				case TokenType.Path:
+					// Paths only end with a right angle bracket.
+					if ( line[position] == '>' )
+					{
+						if ( EndToken( 1 ) is { } pathToken ) yield return pathToken;
+					}
+					continue;
 			}
 
 			// Comments are a special case where we immediately stop processing the line.
@@ -85,7 +92,7 @@ internal class UsdaTokenizer
 				break;
 			}
 
-			// Tokens that take up only one character are handled here.
+			// Check what token the next character would have us start reading.
 			var nextToken = line[position] switch
 			{
 				'{' => TokenType.BraceLeft,
@@ -102,6 +109,7 @@ internal class UsdaTokenizer
 				// Text out in the open without quotes is just a label.
 				>= 'A' and <= 'Z' => TokenType.Label,
 				>= 'a' and <= 'z' => TokenType.Label,
+				'<' => TokenType.Path,
 				_ => TokenType.None
 			};
 			if ( StartToken( nextToken ) is { } preSingleToken ) { yield return preSingleToken; }

@@ -18,5 +18,6 @@ public enum TokenType
 	LiteralInt,
 	LiteralFloat,
 	OpBinaryAssign,
-	Comma
+	Comma,
+	Path
 }

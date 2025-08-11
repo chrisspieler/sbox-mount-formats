@@ -93,12 +93,21 @@ public class UsdaParser( IReadOnlyList<Token> tokens, IReadOnlyList<string> line
 			}
 			
 			var attributeName = reader.ReadLabel();
-			primStack.Peek().AddAttribute( typeName, isArray, attributeName );
-
-			// There may be a TokenType.OpBinaryAssign here, or the line may immediately end.
+			string attributeValue = null;
 			
-			// TODO: Actually read the values of the attributes. 
-			reader.SkipCurrentLine( skipMetadata: true );
+			// If there's a '=' here, try to read the value after it.
+			if ( reader.Peek() is { Type: TokenType.OpBinaryAssign } )
+			{
+				reader.Read();
+				attributeValue = reader.ReadValueAsString();
+			}
+
+			AddAttribute( typeName, isArray, attributeName, attributeValue );
+			if ( reader.Peek() is { Type: TokenType.ParenLeft } )
+			{
+				reader.Read();
+				reader.SkipCurrentMetadata();
+			}
 		}
 
 		Assert.AreEqual( primStack.Count, 0, "Finished reading document without reaching end of prim!" );
@@ -120,6 +129,11 @@ public class UsdaParser( IReadOnlyList<Token> tokens, IReadOnlyList<string> line
 
 			Log.Info( $"Adding {specifier.ToString()} prim {primType} \"{primName}\"" );
 			primStack.Push( prim );
+		}
+
+		void AddAttribute( string typeName, bool isArray, string attributeName, string attributeValue )
+		{
+			primStack.Peek().AddAttribute( typeName, isArray, attributeName, attributeValue );
 		}
 	}
 }
