@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using Sandbox.Diagnostics;
 
 namespace Duccsoft.Formats;
@@ -53,23 +54,24 @@ public class UsdaReader : IFileReader<UsdStage>
 		Assert.AreEqual( headerLine, UsdaHeader, "Unable to parse USDA header!" );
 
 		var lines = new List<string> { headerLine };
-		var tokens = new List<Token> { new( TokenType.Comment, 0, 0, headerLine!.Length ) };
+		var tokens = new Queue<Token>(); 
+		tokens.Enqueue( new Token( TokenType.Comment, 0, 0, headerLine!.Length ) );
 		
 		while ( reader.ReadLine() is { } line ) { lines.Add( line ); }
 		
 		for ( int i = 1; i < lines.Count; i++ )
 		{
-			ReadLineTokens( i, lines[i], tokens );
+			TokenizeLine( i, lines[i], tokens );
 		}
 
 		Log.Info( $"Read {tokens.Count} tokens from USDA file, {tokens.Count( t => t.Type == TokenType.Label )} labels, {tokens.Count( t => t.Type == TokenType.OpBinaryAssign)} assignments, {tokens.Count( t => t.Type == TokenType.LiteralInt)} ints, {tokens.Count(t => t.Type == TokenType.LiteralFloat)} floats,  {tokens.Count( t => t.Type == TokenType.LiteralString )} strings" );
 		
 		// TODO: Build a tree using the tokens we've parsed.
 		
-		return new UsdStage();
+		return Parse( tokens, lines );
 	}
 
-	private void ReadLineTokens( int lineNum, string line, List<Token> tokens )
+	private void TokenizeLine( int lineNum, string line, Queue<Token> tokens )
 	{
 		var tokenType = TokenType.None;
 		var tokenStartPosition = 0;
@@ -89,6 +91,11 @@ public class UsdaReader : IFileReader<UsdStage>
 				case TokenType.Label:
 					// Alphanumeric characters continue a label.
 					if ( char.IsAsciiLetterOrDigit( line[position] ) ) { continue; }
+					
+					// Sometimes, there will be an attribute name with sections separate by colons.
+					// Should this be a different type of token instead of part of the label?
+					if ( line[position] == ':' ) { continue; }
+					
 					break;
 				case TokenType.LiteralInt:
 					// Digits continue an int.
@@ -148,7 +155,7 @@ public class UsdaReader : IFileReader<UsdStage>
 			if ( tokenType != TokenType.None )
 			{
 				// ...make the previous token end on the column before the start of this token.
-				EndToken( -1 );
+				EndToken();
 			}
 
 			tokenType = newType;
@@ -161,12 +168,147 @@ public class UsdaReader : IFileReader<UsdStage>
 				return;
 
 			var tokenLength = position - tokenStartPosition + lengthOffset;
-			tokens.Add( new Token( tokenType, lineNum, tokenStartPosition, tokenLength ) );
+			tokens.Enqueue( new Token( tokenType, lineNum, tokenStartPosition, tokenLength ) );
 			tokenType = TokenType.None;
 		}
 	}
 
-	private bool TryParseSpecifier( string line, out SdfSpecifier? specifier )
+	private UsdStage Parse( Queue<Token> tokens, List<string> lines )
+	{
+		List<UsdPrim> allPrims = [];
+		Stack<UsdPrim> primStack = [];
+
+		while ( tokens.TryDequeue( out var currentToken ) )
+		{
+			Log.Info( $"({currentToken.Line},{currentToken.Position},{currentToken.Length}) {currentToken.Type.ToString()}" );
+			
+			// We don't need to do anything to comments.
+			if ( currentToken.Type == TokenType.Comment )
+				continue;
+
+			if ( currentToken.Type == TokenType.ParenLeft )
+			{
+				// Skip over the layer metadata for now.
+				// TODO: Read metadata for the layer.
+				SkipScope( TokenType.ParenLeft, TokenType.ParenRight );
+				continue;
+			}
+
+			// Have we reached the end of a prim?
+			if ( currentToken.Type == TokenType.BraceRight )
+			{
+				primStack.Pop();
+				continue;
+			}
+			
+			Assert.AreEqual( currentToken.Type, TokenType.Label, "Expected prim specifier or type name!" );
+				
+			if ( TryParseSpecifier( TokenText( currentToken ), out var specifier ) )
+			{
+				var primType = ReadLabel();
+				var primName = ReadStringLiteral();
+				AddPrim( specifier.Value, primType, primName );
+				// If this prim has metadata...
+				if ( tokens.Peek().Type == TokenType.ParenLeft )
+				{
+					tokens.Dequeue();
+					// ...completely ignore it for now.
+					SkipScope( TokenType.ParenLeft, TokenType.ParenRight );
+					// TODO: Parse prim metadata instead of skipping over it.
+				}
+
+				Assert.AreEqual( tokens.Dequeue().Type, TokenType.BraceLeft, "Expected left brace immediately after prim!" );
+				
+				// Continue the loop, as the next element may be either a prim or an attribute.
+				continue;
+			}
+			
+			// If we're not parsing a prim, then we're parsing an attribute.
+			var typeName = TokenText( currentToken );
+
+			// If we aren't reading the type name, then keep going.
+			while ( typeName is "uniform" or "custom" )
+				typeName = ReadLabel();
+
+			var isArray = tokens.Peek().Type == TokenType.BracketLeft; 
+			if ( isArray )
+			{
+				// Dequeue the square brackets.
+				tokens.Dequeue();
+				Assert.AreEqual( tokens.Dequeue().Type, TokenType.BracketRight, "Expected right square bracket in array definition." );
+			}
+			
+			var attributeName = ReadLabel();
+			primStack.Peek().AddAttribute( typeName, isArray, attributeName );
+
+			// There may be a TokenType.OpBinaryAssign here, or the line may immediately end.
+			
+			// TODO: Actually read the values of the attributes. 
+			SkipAttribute( currentToken.Line );
+		}
+
+		Assert.AreEqual( primStack.Count, 0, "Finished reading document without reaching end of prim!" );
+		return new UsdStage( allPrims );
+
+		string TokenText( Token token )
+		{
+			return lines[token.Line].Substring( token.Position, token.Length );
+		}
+
+		string ReadLabel() => TokenText( tokens.Dequeue() );
+		string ReadStringLiteral() => ReadLabel().Trim( '"');
+
+		void SkipScope( TokenType scopeBeginToken, TokenType scopeEndToken )
+		{
+			var depth = 1;
+			do
+			{
+				var currentToken = tokens.Dequeue();
+				if ( currentToken.Type == scopeBeginToken )
+				{
+					depth++;
+				}
+				else if ( currentToken.Type == scopeEndToken )
+				{
+					depth--;
+				}
+			} while ( depth > 0 );
+		}
+
+		void SkipAttribute( int lineNumber )
+		{
+			var lastToken = TokenType.None;
+			while ( tokens.Count > 0 && tokens.Peek().Line <= lineNumber )
+			{
+				lastToken = tokens.Dequeue().Type;
+			}
+
+			// If this attribute has no metadata, we've skipped it just by going to the end of the line.
+			if ( lastToken != TokenType.ParenLeft )
+				return;
+
+			// If there is metadata, keep skipping tokens until we see a right parenthesis.
+			while ( tokens.Count > 0 && tokens.Dequeue().Type != TokenType.ParenRight ) { }
+		}
+
+		void AddPrim( SdfSpecifier specifier, string primType, string primName )
+		{
+			var prim = new UsdPrim()
+			{
+				Specifier = specifier,
+				Type = primType,
+				Name = primName
+			};
+			allPrims.Add( prim );
+			if ( primStack.TryPeek( out var parent ) )
+			{
+				parent.AddChild( prim );
+			}
+			primStack.Push( prim );
+		}
+	}
+
+	private bool TryParseSpecifier( string line, [NotNullWhen(true)]out SdfSpecifier? specifier )
 	{
 		specifier = null;
 		
