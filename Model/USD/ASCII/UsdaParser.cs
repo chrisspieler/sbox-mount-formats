@@ -114,7 +114,7 @@ public class UsdaParser( IReadOnlyList<Token> tokens, IReadOnlyList<string> line
 		var reader = new TokenReader( tokens );
 		while ( reader.Read() is { } currentToken )
 		{
-			Log.Info( $"({currentToken.Line + 1},{currentToken.Position + 1},{currentToken.Length + 1}) {currentToken.Type.ToString()}" );
+			// Log.Info( $"({currentToken.Line + 1},{currentToken.Position + 1},{currentToken.Length + 1}) {currentToken.Type.ToString()}" );
 
 			switch (currentToken.Type)
 			{
@@ -128,7 +128,7 @@ public class UsdaParser( IReadOnlyList<Token> tokens, IReadOnlyList<string> line
 					continue;
 				// Have we reached the end of a prim?
 				case TokenType.BraceRight:
-					Log.Info( $"Popping prim \"{primStack.Peek().Name}\"" );
+					// Log.Info( $"Popping prim \"{primStack.Peek().Name}\"" );
 					primStack.Pop();
 					continue;
 				case TokenType.LiteralString:
@@ -222,7 +222,7 @@ public class UsdaParser( IReadOnlyList<Token> tokens, IReadOnlyList<string> line
 				parent.AddChild( prim );
 			}
 
-			Log.Info( $"Adding {specifier.ToString()} prim {primType} \"{primName}\"" );
+			// Log.Info( $"Adding {specifier.ToString()} prim {primType} \"{primName}\"" );
 			primStack.Push( prim );
 		}
 

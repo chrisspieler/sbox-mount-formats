@@ -136,6 +136,10 @@ public class TokenReader( IReadOnlyList<Token> tokens )
 
 		IEnumerable<T> ReadArray<T>()
 		{
+			// Empty array.
+			if ( Peek() is { Type: TokenType.Label } label && label.Text == "None" )
+				yield break;
+			
 			Assert.AreEqual( Read()!.Value.Type, TokenType.BracketLeft );
 
 			while ( Peek() is { Type: not TokenType.BracketRight } nextToken )
