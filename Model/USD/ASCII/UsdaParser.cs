@@ -9,6 +9,96 @@ public class UsdaParser( IReadOnlyList<Token> tokens, IReadOnlyList<string> line
 {
 	public IReadOnlyList<string> Lines { get; } = lines;
 
+	private static IReadOnlyDictionary<string, AttributeType> _attributeTypeNames =
+		new Dictionary<string, AttributeType>
+		{
+			// Basic data types
+			{ "bool", AttributeType.Bool },
+			{ "uchar", AttributeType.UChar },
+			{ "int", AttributeType.Int },
+			{ "uint", AttributeType.Uint },
+			{ "int64", AttributeType.Int64 },
+			{ "uint64", AttributeType.Uint64 },
+			{ "half", AttributeType.Half },
+			{ "float", AttributeType.Float },
+			{ "double", AttributeType.Double },
+			{ "timecode", AttributeType.Timecode },
+			{ "string", AttributeType.String },
+			{ "token", AttributeType.Token },
+			{ "asset", AttributeType.Asset },
+			{ "opaque", AttributeType.Opaque },
+			{ "matrix2d", AttributeType.Matrix2d },
+			{ "matrix3d", AttributeType.Matrix3d },
+			{ "matrix4d", AttributeType.Matrix4d },
+			{ "quatd", AttributeType.Quatd },
+			{ "quatf", AttributeType.Quatf },
+			{ "quath", AttributeType.Quath },
+			{ "double2", AttributeType.Double2 },
+			{ "float2", AttributeType.Float2 },
+			{ "half2", AttributeType.Half2 },
+			{ "int2", AttributeType.Int2 },
+			{ "double3", AttributeType.Double3 },
+			{ "float3", AttributeType.Float3 },
+			{ "half3", AttributeType.Half3 },
+			{ "int3", AttributeType.Int3 },
+			{ "double4", AttributeType.Double4 },
+			{ "float4", AttributeType.Float4 },
+			{ "half4", AttributeType.Half4 },
+			{ "int4", AttributeType.Int4 },
+			// Roles
+			{ "point3d", AttributeType.Double3 },
+			{ "point3f", AttributeType.Float3 },
+			{ "point3h", AttributeType.Half3 },
+			{ "normal3d", AttributeType.Double3 },
+			{ "normal3f", AttributeType.Float3 },
+			{ "normal3h", AttributeType.Half3 },
+			{ "vector3d", AttributeType.Double3 },
+			{ "vector3f", AttributeType.Float3 },
+			{ "vector3h", AttributeType.Half3 },
+			{ "color3d", AttributeType.Double3 },
+			{ "color3f", AttributeType.Float3 },
+			{ "color3h", AttributeType.Half3 },
+			{ "color4d", AttributeType.Double4 },
+			{ "color4f", AttributeType.Float4 },
+			{ "color4h", AttributeType.Half4 },
+			{ "frame4d", AttributeType.Matrix4d },
+			{ "texCoord2d", AttributeType.Double2 },
+			{ "texCoord2f", AttributeType.Float2 },
+			{ "texCoord2h", AttributeType.Half2 },
+			{ "texCoord3d", AttributeType.Double3 },
+			{ "texCoord3f", AttributeType.Float3 },
+			{ "texCoord3h", AttributeType.Half3 },
+			{ "group", AttributeType.Opaque }
+		};
+
+	private static IReadOnlyDictionary<string, AttributeRole> _attributeTypeRoles =
+		new Dictionary<string, AttributeRole>
+		{
+			{ "point3d", AttributeRole.Point },
+			{ "point3f", AttributeRole.Point },
+			{ "point3h", AttributeRole.Point },
+			{ "normal3d", AttributeRole.Normal },
+			{ "normal3f", AttributeRole.Normal },
+			{ "normal3h", AttributeRole.Normal },
+			{ "vector3d", AttributeRole.Vector },
+			{ "vector3f", AttributeRole.Vector },
+			{ "vector3h", AttributeRole.Vector },
+			{ "color3d", AttributeRole.Color },
+			{ "color3f", AttributeRole.Color },
+			{ "color3h", AttributeRole.Color },
+			{ "color4d", AttributeRole.Color },
+			{ "color4f", AttributeRole.Color },
+			{ "color4h", AttributeRole.Color },
+			{ "frame4d", AttributeRole.Frame },
+			{ "texCoord2d", AttributeRole.TexCoord },
+			{ "texCoord2f", AttributeRole.TexCoord },
+			{ "texCoord2h", AttributeRole.TexCoord },
+			{ "texCoord3d", AttributeRole.TexCoord },
+			{ "texCoord3f", AttributeRole.TexCoord },
+			{ "texCoord3h", AttributeRole.TexCoord },
+			{ "group", AttributeRole.Group }
+		};
+
 	public UsdStage Parse()
 	{
 		// A flat layout of every prim that will be contained in the output stage.
@@ -83,6 +173,9 @@ public class UsdaParser( IReadOnlyList<Token> tokens, IReadOnlyList<string> line
 			// If the next label wasn't a type name, keep getting the next label until it's a type name. 
 			while ( typeName is "uniform" or "custom" )
 				typeName = reader.ReadLabel();
+			
+			if ( !_attributeTypeNames.TryGetValue( typeName, out var attributeType ) ) { Log.Info( $"Unknown type: {typeName}" ); }
+			_attributeTypeRoles.TryGetValue( typeName, out var attributeRole );
 
 			var isArray = reader.Peek() is { Type: TokenType.BracketLeft }; 
 			if ( isArray )
@@ -102,7 +195,7 @@ public class UsdaParser( IReadOnlyList<Token> tokens, IReadOnlyList<string> line
 				attributeValue = reader.ReadValueAsString();
 			}
 
-			AddAttribute( typeName, isArray, attributeName, attributeValue );
+			AddAttribute( attributeType, attributeRole, isArray, attributeName, attributeValue );
 			if ( reader.Peek() is { Type: TokenType.ParenLeft } )
 			{
 				reader.Read();
@@ -131,9 +224,9 @@ public class UsdaParser( IReadOnlyList<Token> tokens, IReadOnlyList<string> line
 			primStack.Push( prim );
 		}
 
-		void AddAttribute( string typeName, bool isArray, string attributeName, string attributeValue )
+		void AddAttribute( AttributeType type, AttributeRole role, bool isArray, string name, string valueText )
 		{
-			primStack.Peek().AddAttribute( typeName, isArray, attributeName, attributeValue );
+			primStack.Peek().AddAttribute( type, role, isArray, name, valueText );
 		}
 	}
 }

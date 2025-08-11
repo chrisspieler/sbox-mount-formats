@@ -1,0 +1,38 @@
+﻿namespace Duccsoft.Formats.Usd;
+
+public enum AttributeType
+{
+	Unknown,
+	Bool,
+	UChar,
+	Int,
+	Uint,
+	Int64,
+	Uint64,
+	Half,
+	Float,
+	Double,
+	Timecode,
+	String,
+	Token,
+	Asset,
+	Opaque,
+	Matrix2d,
+	Matrix3d,
+	Matrix4d,
+	Quatd,
+	Quatf,
+	Quath,
+	Double2,
+	Float2,
+	Half2,
+	Int2,
+	Double3,
+	Float3,
+	Half3,
+	Int3,
+	Double4,
+	Float4,
+	Half4,
+	Int4
+}
