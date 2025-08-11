@@ -55,7 +55,11 @@ public class UsdaParser( IReadOnlyList<Token> tokens, IReadOnlyList<string> line
 				
 			if ( currentToken.AsSpecifier() is { } specifier )
 			{
-				var primType = reader.ReadLabel();
+				var primType = "(override)";
+				if ( specifier == SdfSpecifier.SdfSpecifierDef )
+				{
+					primType = reader.ReadLabel();
+				}
 				var primName = reader.ReadStringLiteral();
 				AddPrim( specifier, primType, primName );
 				// If this prim has metadata...
