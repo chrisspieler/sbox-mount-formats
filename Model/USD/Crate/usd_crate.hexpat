@@ -1,6 +1,7 @@
 #pragma author ducc
 #pragma description OpenUSD Crate File
 
+import std.string;
 
 struct Section {
   char Name[16];
@@ -28,5 +29,28 @@ struct Bootstrap {
     u64 Reserved;
 };
 
+struct TokensSection {
+    u64 NumTokens;
+    u64 UncompressedSize;
+    u64 CompressedSize;
+    u8 NumChunks;
+};
+
+fn FindSection( ref Toc toc, str findName )
+{
+    for( u8 i = 0, i < toc.Count, i += 1 )
+    {
+        Section section = toc.Sections[i];
+        str name = section.Name;
+        if ( std::string::starts_with( name, findName ) ) {
+            return section.Start;
+        }
+    }
+    return 0x0;
+};
+
 Bootstrap Bootstrap @ 0x0;
 Toc TableOfContents @ Bootstrap.TocOffset;
+
+u64 tokensSectionOffset = FindSection( TableOfContents, "TOKENS" );
+TokensSection TokensSection @ tokensSectionOffset;

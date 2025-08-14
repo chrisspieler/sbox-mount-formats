@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using LZ4;
 using Sandbox.Diagnostics;
 
 namespace Duccsoft.Formats.Usd.Crate;
@@ -9,14 +10,14 @@ public class UsdcReader : IFileReader<UsdStage>
 	public static readonly byte[] UsdcMagic = "PXR-USDC"u8.ToArray();
 
 	private record TocSection( string Name, ulong Start, ulong End );
-	
+
 	public UsdStage ReadFromPath( string filePath )
 	{
 		var bytes = File.ReadAllBytes( filePath );
 		Log.Info( $"Read {bytes.Length.FormatBytes()} file: {filePath}" );
 		return ReadFromBytes( bytes );
 	}
-	
+
 	public UsdStage ReadFromBytes( byte[] bytes )
 	{
 		var reader = new BinaryReader( new MemoryStream( bytes ) );
@@ -27,7 +28,7 @@ public class UsdcReader : IFileReader<UsdStage>
 
 		// Skip version padding.
 		reader.BaseStream.Position += 5;
-		
+
 		var tocOffset = reader.ReadUInt64();
 		reader.BaseStream.Position = (long)tocOffset;
 
@@ -36,7 +37,7 @@ public class UsdcReader : IFileReader<UsdStage>
 		{
 			var section = ReadTocSection();
 			sections[i] = section;
-			
+
 			Log.Info( $"Section #{i} \"{sections[i].Name}\" from 0x{sections[i].Start:X8} to 0x{sections[i].End:X8}" );
 		}
 
@@ -49,8 +50,16 @@ public class UsdcReader : IFileReader<UsdStage>
 					var numTokens = reader.ReadUInt64();
 					var uncompressedSize = reader.ReadUInt64();
 					var compressedSize = reader.ReadUInt64();
-					Log.Info( $"Found TOKENS section. numTokens: {numTokens}, uncompressedSize: {uncompressedSize}, compressedSize: {compressedSize}" );
-					// TODO: Decompress the LZ4-compressed integer array in the token section.
+					var numChunks = reader.ReadByte();
+					Log.Info(
+						$"Found TOKENS section. numTokens: {numTokens}, uncompressedSize: {uncompressedSize}, compressedSize: {compressedSize}, numChunks: {numChunks}" );
+					Assert.True( numChunks == 0, $"There were actually {numChunks} chunks. Whoops!" );
+					byte[] uncompressed = LZ4Codec.Decode(
+						input: reader.ReadBytes( (int)compressedSize ),
+						inputOffset: 0,
+						inputLength: (int)compressedSize - 1,
+						outputLength: (int)uncompressedSize
+					);
 					break;
 				case "STRINGS":
 				case "FIELDS":
@@ -63,7 +72,7 @@ public class UsdcReader : IFileReader<UsdStage>
 					break;
 			}
 		}
-		
+
 		return new UsdStage( [] );
 
 		TocSection ReadTocSection() => new TocSection(

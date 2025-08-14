@@ -23,7 +23,16 @@ The following texture formats may be read from DDS files:
 *Coming soon!*
 
 #### Compression
-*Coming soon!*
+The following formats may be decompressed:
+- LZ4
 
 ### Attributions
-*Coming soon!*
+Because DLL references are not supported in s&box editor projects, some code has been copied directly from third party repositories. Modifications have been made to copied code to ensure compatibility with s&box.
+
+All copied code is attributed below:
+
+##### lz4net
+Repo: https://github.com/MiloszKrajewski/lz4net
+Author: [Milosz Krajewski](https://github.com/MiloszKrajewski)
+License: [BSD-2-Clause](https://github.com/MiloszKrajewski/lz4net/blob/master/LICENSE.md)
+Path: `/ThirdParty/lz4net`
