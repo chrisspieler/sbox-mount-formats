@@ -34,6 +34,12 @@ struct TokensSection {
     u64 UncompressedSize;
     u64 CompressedSize;
     u8 NumChunks;
+    u8 CompressedData[CompressedSize - 1];
+};
+
+struct IndexList {
+    u64 NumEntries;
+    u32 Indices[NumEntries];
 };
 
 fn FindSection( ref Toc toc, str findName )
@@ -52,5 +58,5 @@ fn FindSection( ref Toc toc, str findName )
 Bootstrap Bootstrap @ 0x0;
 Toc TableOfContents @ Bootstrap.TocOffset;
 
-u64 tokensSectionOffset = FindSection( TableOfContents, "TOKENS" );
-TokensSection TokensSection @ tokensSectionOffset;
+TokensSection TokensSection @ FindSection( TableOfContents, "TOKENS" );
+IndexList StringsSection @ FindSection( TableOfContents, "STRINGS" );
