@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Runtime.InteropServices;
-using LZ4ps;
+using K4os.Compression.LZ4;
 using Sandbox.Diagnostics;
 
 namespace Duccsoft.Formats.Usd.Crate;
@@ -102,7 +102,7 @@ public class UsdcReader : IFileReader<UsdStage>
 		var uncompressedSize = reader.ReadUInt64();
 		var compressedSize = reader.ReadUInt64();
 
-		var uncompressed = DecompressFromBuffer( reader, (int)compressedSize, (int)uncompressedSize, false );
+		var uncompressed = DecompressFromBuffer( reader, (int)compressedSize, (int)uncompressedSize );
 		Assert.True( uncompressed[^1] == 0x0, "The byte of token data must be null" );
 
 		var tokenStream = new MemoryStream( uncompressed );
@@ -134,8 +134,8 @@ public class UsdcReader : IFileReader<UsdStage>
 		var numFields = (int)reader.ReadUInt64();
 		Log.Info( $"0x{reader.BaseStream.Position:X8} numFields: {numFields}" );
 		var fields = new Field[numFields];
-		var indices = ReadCompressedInts<uint>( reader, numFields, false );
-		var values = ReadCompressedInts<ulong>( reader, numFields, false );
+		var indices = ReadCompressedInts<uint>( reader, numFields );
+		var values = ReadCompressedInts<ulong>( reader, numFields );
 		Log.Info( $"Indices: {indices.Length}, values: {values.Length}" );
 		for ( int i = 0; i < fields.Length; i++ )
 		{
@@ -145,7 +145,7 @@ public class UsdcReader : IFileReader<UsdStage>
 		return fields;
 	}
 
-	private Span<T> ReadCompressedInts<T>( BinaryReader reader, int elementCount, bool knownOutputLength ) 
+	private Span<T> ReadCompressedInts<T>( BinaryReader reader, int elementCount ) 
 		where T : unmanaged
 	{
 		Log.Info( $"0x{reader.BaseStream.Position:X8} {nameof(ReadCompressedInts)}" );
@@ -154,26 +154,20 @@ public class UsdcReader : IFileReader<UsdStage>
 		Log.Info( $"0x{reader.BaseStream.Position:X8} compressed size: {compressedSize}" );
 		var uncompressedSize = Marshal.SizeOf<T>() * elementCount;
 		Log.Info( $"uncompressed size: {uncompressedSize}" );
-		byte[] bytes = DecompressFromBuffer( reader, compressedSize, uncompressedSize, knownOutputLength );
+		byte[] bytes = DecompressFromBuffer( reader, compressedSize, uncompressedSize );
 		return MemoryMarshal.Cast<byte, T>( bytes );
 	}
 	
-	private byte[] DecompressFromBuffer( BinaryReader reader, int compressedSize, int outputLength, bool knownOutputLength )
+	private byte[] DecompressFromBuffer( BinaryReader reader, int compressedSize, int outputLength )
 	{
+		// The chunks byte counts toward the compressed size, but is not part of the compressed data.
+		compressedSize -= 1;
 		var numChunks = reader.ReadByte();
 		Log.Info( $"0x{reader.BaseStream.Position:X8} numChunks: {numChunks}" );
 		Assert.True( numChunks == 0, $"There were actually {numChunks} chunks. Whoops!" );
 		var output = new byte[outputLength];
-		var compressed = reader.ReadBytes( compressedSize - 1 );
-		var result = LZ4Codec.Decode32(
-			input: compressed,
-			inputOffset: 0,
-			inputLength: compressedSize - 1,
-			output: output,
-			outputOffset: 0,
-			outputLength: outputLength,
-			knownOutputLength: knownOutputLength
-		);
+		var compressed = reader.ReadBytes( compressedSize );
+		var result = LZ4Codec.Decode( compressed, output );
 		Log.Info( $"0x{reader.BaseStream.Position:X8} decompress {result} bytes" );
 		return output[..result];
 	}

@@ -31,8 +31,8 @@ Because DLL references are not supported in s&box editor projects, some code has
 
 All copied code is attributed below:
 
-##### lz4net
-Repo: https://github.com/MiloszKrajewski/lz4net
+##### K4os.Compression.LZ4
+Repo: https://github.com/MiloszKrajewski/K4os.Compression.LZ4
 Author: [Milosz Krajewski](https://github.com/MiloszKrajewski)
-License: [BSD-2-Clause](https://github.com/MiloszKrajewski/lz4net/blob/master/LICENSE.md)
-Path: `/ThirdParty/lz4net`
+License: [MIT](https://github.com/MiloszKrajewski/K4os.Compression.LZ4/blob/master/LICENSE)
+Path: `/ThirdParty/K4os.Compression.LZ4`
