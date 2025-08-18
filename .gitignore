@@ -1,0 +1,5 @@
+# IDE files
+/.idea
+
+# Third party build files
+/ThirdParty/K4os.Compression.LZ4/obj

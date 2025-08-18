@@ -1,7 +1,5 @@
 ﻿using System;
 using System.IO;
-using System.Runtime.InteropServices;
-using K4os.Compression.LZ4;
 using Sandbox.Diagnostics;
 
 namespace Duccsoft.Formats.Usd.Crate;
@@ -63,7 +61,7 @@ public class UsdcReader : IFileReader<UsdStage>
 					stringIndices = ReadStringIndices( section, reader );
 					break;
 				case "FIELDS":
-					// fields = ReadFields( section, reader );
+					fields = ReadFields( section, reader );
 					break;
 				case "FIELDSETS":
 				case "PATHS":
@@ -102,7 +100,7 @@ public class UsdcReader : IFileReader<UsdStage>
 		var uncompressedSize = reader.ReadUInt64();
 		var compressedSize = reader.ReadUInt64();
 
-		var uncompressed = DecompressFromBuffer( reader, (int)compressedSize, (int)uncompressedSize );
+		var uncompressed = Compression.DecompressFromBuffer( reader, (int)compressedSize, (int)uncompressedSize );
 		Assert.True( uncompressed[^1] == 0x0, "The byte of token data must be null" );
 
 		var tokenStream = new MemoryStream( uncompressed );
@@ -134,50 +132,16 @@ public class UsdcReader : IFileReader<UsdStage>
 		var numFields = (int)reader.ReadUInt64();
 		Log.Info( $"0x{reader.BaseStream.Position:X8} numFields: {numFields}" );
 		var fields = new Field[numFields];
-		var indices = ReadCompressedInts<uint>( reader, numFields );
-		var values = ReadCompressedInts<ulong>( reader, numFields );
+		
+		var indices = IntegerCoding<uint,int>.ReadCompressedInts( reader, numFields );
+		var values = IntegerCoding<ulong,long>.ReadCompressedInts( reader, numFields );
+		
 		Log.Info( $"Indices: {indices.Length}, values: {values.Length}" );
 		for ( int i = 0; i < fields.Length; i++ )
 		{
 			fields[i] = new Field { TokenIndex = indices[i], ValueRep = values[i] };
-			Log.Info( $"field {fields[i].TokenIndex} {fields[i].ValueRep}" );
+			// Log.Info( $"field {fields[i].TokenIndex} {fields[i].ValueRep}" );
 		}
 		return fields;
-	}
-
-	private Span<T> ReadCompressedInts<T>( BinaryReader reader, int elementCount ) 
-		where T : unmanaged
-	{
-		Log.Info( $"0x{reader.BaseStream.Position:X8} {nameof(ReadCompressedInts)}" );
-		// Is the actual size of compressed data better than the worst case?
-		var compressedSize = Math.Min( (int)reader.ReadUInt64(), GetMaxEncodedBufferSize<T>( elementCount ) );
-		Log.Info( $"0x{reader.BaseStream.Position:X8} compressed size: {compressedSize}" );
-		var uncompressedSize = Marshal.SizeOf<T>() * elementCount;
-		Log.Info( $"uncompressed size: {uncompressedSize}" );
-		byte[] bytes = DecompressFromBuffer( reader, compressedSize, uncompressedSize );
-		return MemoryMarshal.Cast<byte, T>( bytes );
-	}
-	
-	private byte[] DecompressFromBuffer( BinaryReader reader, int compressedSize, int outputLength )
-	{
-		// The chunks byte counts toward the compressed size, but is not part of the compressed data.
-		compressedSize -= 1;
-		var numChunks = reader.ReadByte();
-		Log.Info( $"0x{reader.BaseStream.Position:X8} numChunks: {numChunks}" );
-		Assert.True( numChunks == 0, $"There were actually {numChunks} chunks. Whoops!" );
-		var output = new byte[outputLength];
-		var compressed = reader.ReadBytes( compressedSize );
-		var result = LZ4Codec.Decode( compressed, output );
-		Log.Info( $"0x{reader.BaseStream.Position:X8} decompress {result} bytes" );
-		return output[..result];
-	}
-
-	/// <summary>
-	/// Gets the worst-case size of the compressed buffer for the given type and number of integers.
-	/// </summary>
-	private static int GetMaxEncodedBufferSize<TInt>( int numInts ) where TInt : unmanaged
-	{
-		var intSize = Marshal.SizeOf<TInt>();
-		return numInts < 1 ? 0 : intSize + ((numInts * 2 + 7) / 8) + (numInts * intSize);
 	}
 }
