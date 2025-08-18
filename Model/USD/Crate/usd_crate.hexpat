@@ -37,10 +37,42 @@ struct TokensSection {
     u8 CompressedData[CompressedSize - 1];
 };
 
-struct IndexList {
+struct StringsSection {
     u64 NumEntries;
     u32 Indices[NumEntries];
 };
+
+struct CompressedData {
+    u64 DataSize;
+    u8 Data[DataSize];
+};
+
+struct FieldsSection {
+    u64 NumFields;
+    CompressedData Indices;
+    CompressedData Values;
+};
+
+struct FieldSetsSection {
+    u64 NumFieldSets;
+    CompressedData Data;
+};
+
+struct PathsSection {
+    u64 NumPaths;
+    u64 NumEncodedPaths;
+    CompressedData PathIndices;
+    CompressedData ElementTokenIndices;
+    CompressedData Jumps;
+};
+
+struct SpecsSection {
+    u64 NumSpecs;
+    CompressedData PathIndices;
+    CompressedData FieldSetIndices;
+    CompressedData SpecTypes;
+};
+
 
 fn FindSection( ref Toc toc, str findName )
 {
@@ -58,5 +90,9 @@ fn FindSection( ref Toc toc, str findName )
 Bootstrap Bootstrap @ 0x0;
 Toc TableOfContents @ Bootstrap.TocOffset;
 
-TokensSection TokensSection @ FindSection( TableOfContents, "TOKENS" );
-IndexList StringsSection @ FindSection( TableOfContents, "STRINGS" );
+TokensSection Tokens @ FindSection( TableOfContents, "TOKENS" );
+StringsSection Strings @ FindSection( TableOfContents, "STRINGS" );
+FieldsSection Fields @ FindSection( TableOfContents, "FIELDS" );
+FieldSetsSection FieldSets @ FindSection( TableOfContents, "FIELDSETS" );
+PathsSection Paths @ FindSection( TableOfContents, "PATHS" );
+SpecsSection Specs @ FindSection( TableOfContents, "SPECS" );
