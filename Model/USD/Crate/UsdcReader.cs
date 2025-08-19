@@ -49,6 +49,7 @@ public class UsdcReader : IFileReader<UsdStage>
 		var tokens = Array.Empty<string>();
 		var stringIndices = Array.Empty<uint>();
 		var fields = Array.Empty<Field>();
+		Span<uint> fieldSets = [];
 
 		foreach ( var section in sections )
 		{
@@ -64,8 +65,17 @@ public class UsdcReader : IFileReader<UsdStage>
 					fields = ReadFields( section, reader );
 					break;
 				case "FIELDSETS":
+					fieldSets = ReadFieldSets( section, reader );
+					// foreach ( var fieldSet in fieldSets )
+					// {
+					// 	Log.Info( $"Field set idx: {fieldSet}" );
+					// }
+					break;
 				case "PATHS":
+					
+					break;
 				case "SPECS":
+					
 					break;
 				default:
 					Log.Info( $"Unrecognized section: {section.Name}" );
@@ -73,7 +83,7 @@ public class UsdcReader : IFileReader<UsdStage>
 			}
 		}
 
-		Log.Info( $"Read {tokens.Length} tokens, {stringIndices.Length} strings, {fields.Length} fields" );
+		Log.Info( $"Read {tokens.Length} tokens, {stringIndices.Length} strings, {fields.Length} fields, {fieldSets.Length} fieldSets" );
 
 		return new UsdStage( [] );
 
@@ -143,5 +153,13 @@ public class UsdcReader : IFileReader<UsdStage>
 			// Log.Info( $"field {fields[i].TokenIndex} {fields[i].ValueRep}" );
 		}
 		return fields;
+	}
+
+	private Span<uint> ReadFieldSets( TocSection fieldSetSection, BinaryReader reader )
+	{
+		reader.BaseStream.Position = (long)fieldSetSection.Start;
+
+		var numFieldSets = (int)reader.ReadUInt64();
+		return IntegerCoding<uint, int>.ReadCompressedInts( reader, numFieldSets );
 	}
 }
