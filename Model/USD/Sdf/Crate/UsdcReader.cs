@@ -16,6 +16,9 @@ public class UsdcReader : IFileReader<UsdStage>
 		public ulong ValueRep;
 	}
 
+	private SdfPath[] _paths = [];
+	private TfToken[] _tokens = [];
+
 	public UsdStage ReadFromPath( string filePath )
 	{
 		var bytes = File.ReadAllBytes( filePath );
@@ -45,8 +48,7 @@ public class UsdcReader : IFileReader<UsdStage>
 
 			Log.Info( $"Section #{i} \"{sections[i].Name}\" from 0x{sections[i].Start:X8} to 0x{sections[i].End:X8}" );
 		}
-
-		var tokens = Array.Empty<string>();
+		
 		var stringIndices = Array.Empty<uint>();
 		var fields = Array.Empty<Field>();
 		Span<uint> fieldSets = [];
@@ -56,7 +58,7 @@ public class UsdcReader : IFileReader<UsdStage>
 			switch ( section.Name )
 			{
 				case "TOKENS":
-					tokens = ReadTokens( section, reader );
+					ReadTokens( section, reader );
 					break;
 				case "STRINGS":
 					stringIndices = ReadStringIndices( section, reader );
@@ -72,7 +74,11 @@ public class UsdcReader : IFileReader<UsdStage>
 					// }
 					break;
 				case "PATHS":
-					
+					ReadPaths( section, reader );
+					// foreach ( var path in _paths )
+					// {
+					// 	Log.Info( path );
+					// }
 					break;
 				case "SPECS":
 					
@@ -83,7 +89,7 @@ public class UsdcReader : IFileReader<UsdStage>
 			}
 		}
 
-		Log.Info( $"Read {tokens.Length} tokens, {stringIndices.Length} strings, {fields.Length} fields, {fieldSets.Length} fieldSets" );
+		Log.Info( $"Read {_tokens.Length} tokens, {stringIndices.Length} strings, {fields.Length} fields, {fieldSets.Length} fieldSets, {_paths.Length} paths" );
 
 		return new UsdStage( [] );
 
@@ -103,7 +109,7 @@ public class UsdcReader : IFileReader<UsdStage>
 		}
 	}
 
-	private string[] ReadTokens( TocSection tokenSection, BinaryReader reader )
+	private void ReadTokens( TocSection tokenSection, BinaryReader reader )
 	{
 		reader.BaseStream.Position = (long)tokenSection.Start;
 		var numTokens = reader.ReadUInt64();
@@ -114,13 +120,13 @@ public class UsdcReader : IFileReader<UsdStage>
 		Assert.True( uncompressed[^1] == 0x0, "The byte of token data must be null" );
 
 		var tokenStream = new MemoryStream( uncompressed );
-		var tokens = new string[numTokens];
+		_tokens = new TfToken[numTokens];
 		for ( ulong i = 0; i < numTokens; i++ )
 		{
-			tokens[i] = tokenStream.ReadNullTerminatedString( tokenStream.Position );
+			_tokens[i] = tokenStream.ReadNullTerminatedString( tokenStream.Position );
 		}
 
-		return tokens;
+		Log.Info( $"Read {_tokens.Length} tokens" );
 	}
 
 	private uint[] ReadStringIndices( TocSection stringsSection, BinaryReader reader )
@@ -132,6 +138,7 @@ public class UsdcReader : IFileReader<UsdStage>
 			indices[i] = reader.ReadUInt32();
 		}
 
+		Log.Info( $"Read {indices.Length} string indices" );
 		return indices;
 	}
 
@@ -140,7 +147,7 @@ public class UsdcReader : IFileReader<UsdStage>
 		reader.BaseStream.Position = (long)fieldsSection.Start;
 
 		var numFields = (int)reader.ReadUInt64();
-		Log.Info( $"0x{reader.BaseStream.Position:X8} numFields: {numFields}" );
+		// Log.Info( $"0x{reader.BaseStream.Position:X8} numFields: {numFields}" );
 		var fields = new Field[numFields];
 		
 		var indices = IntegerCoding<uint,int>.ReadCompressedInts( reader, numFields );
@@ -161,5 +168,68 @@ public class UsdcReader : IFileReader<UsdStage>
 
 		var numFieldSets = (int)reader.ReadUInt64();
 		return IntegerCoding<uint, int>.ReadCompressedInts( reader, numFieldSets );
+	}
+
+	private void ReadPaths( TocSection pathsSection, BinaryReader reader )
+	{
+		reader.BaseStream.Position = (long)pathsSection.Start;
+
+		var numPaths = (int)reader.ReadUInt64();
+		// For some reason, the number of paths is stored a second time? Freak out if this assumption doesn't hold.
+		Assert.AreEqual( numPaths, (int)reader.ReadUInt64(), "Second numPaths was different from first." );
+
+		_paths = new SdfPath[numPaths];
+		
+		var pathIndices = IntegerCoding<uint, int>.ReadCompressedInts( reader, numPaths );
+		var elementTokenIndices = IntegerCoding<int, int>.ReadCompressedInts( reader, numPaths );
+		var jumps = IntegerCoding<int, int>.ReadCompressedInts( reader, numPaths );
+		
+		BuildPaths(
+			pathIndices : pathIndices,
+			elementTokenIndices: elementTokenIndices,
+			jumps: jumps,
+			curIndex: 0,
+			parentPath: SdfPath.EmptyPath
+		);
+	}
+
+	private void BuildPaths( Span<uint> pathIndices, Span<int> elementTokenIndices, Span<int> jumps, int curIndex, SdfPath parentPath )
+	{
+		bool hasChild;
+		bool hasSibling;
+		
+		do
+		{
+			var thisIndex = curIndex++;
+			var pathIndex = (int)pathIndices[thisIndex];
+
+			if ( parentPath.IsEmpty() )
+			{
+				parentPath = SdfPath.AbsoluteRootPath();
+				_paths[pathIndex] = parentPath;
+			}
+			else
+			{
+				var isPrimPropertyPath = elementTokenIndices[thisIndex] < 0;
+				var tokenIndex = Math.Abs( elementTokenIndices[thisIndex] );
+				var elemToken = _tokens[tokenIndex];
+				_paths[pathIndex] = isPrimPropertyPath
+					? parentPath.AppendProperty( elemToken )
+					: parentPath.AppendElementToken( elemToken );
+			}
+
+			hasChild = jumps[thisIndex] > 0 || jumps[thisIndex] == -1;
+			hasSibling = jumps[thisIndex] >= 0;
+			
+			if ( !hasChild )
+				continue;
+
+			if ( hasSibling )
+			{
+				var siblingIndex = thisIndex + jumps[thisIndex];
+				BuildPaths( pathIndices, elementTokenIndices, jumps, siblingIndex, parentPath );
+			}
+			parentPath = _paths[pathIndex];
+		} while ( hasChild || hasSibling );
 	}
 }

@@ -1,4 +1,6 @@
-﻿namespace Duccsoft.Formats.Usd;
+﻿using Duccsoft.Formats.Usd;
+
+namespace Duccsoft.Formats.Usd;
 
 /// <summary>
 /// The primary container object in USD. 
