@@ -16,8 +16,32 @@ public class UsdcReader : IFileReader<UsdStage>
 		public ulong ValueRep;
 	}
 
+	private enum SdfSpecType : uint
+	{
+		SdfSpecTypeUnknown = 0,
+		SdfSpecTypeAttribute,
+		SdfSpecTypeConnection,
+		SdfSpecTypeExpression,
+		SdfSpecTypeMapper,
+		SdfSpecTypeMapperArg,
+		SdfSpecTypePrim,
+		SdfSpecTypePseudoRoot,
+		SdfSpecTypeRelationship,
+		SdfSpecTypeRelationshipTarget,
+		SdfSpecTypeVariant,
+		SdfSpecTypeVariantSet
+	}
+
+	private struct Spec
+	{
+		public uint PathIndex;
+		public uint FieldSetIndex;
+		public SdfSpecType SpecType;
+	}
+
 	private SdfPath[] _paths = [];
 	private TfToken[] _tokens = [];
+	private Spec[] _specs = [];
 
 	public UsdStage ReadFromPath( string filePath )
 	{
@@ -46,7 +70,7 @@ public class UsdcReader : IFileReader<UsdStage>
 			var section = ReadTocSection();
 			sections[i] = section;
 
-			Log.Info( $"Section #{i} \"{sections[i].Name}\" from 0x{sections[i].Start:X8} to 0x{sections[i].End:X8}" );
+			// Log.Info( $"Section #{i} \"{sections[i].Name}\" from 0x{sections[i].Start:X8} to 0x{sections[i].End:X8}" );
 		}
 		
 		var stringIndices = Array.Empty<uint>();
@@ -81,7 +105,11 @@ public class UsdcReader : IFileReader<UsdStage>
 					// }
 					break;
 				case "SPECS":
-					
+					ReadSpecs( section, reader );
+					// foreach ( var spec in _specs )
+					// {
+					// 	Log.Info( $"{spec.SpecType} path:{spec.PathIndex}, fieldSet:{spec.FieldSetIndex}" );
+					// }
 					break;
 				default:
 					Log.Info( $"Unrecognized section: {section.Name}" );
@@ -89,7 +117,7 @@ public class UsdcReader : IFileReader<UsdStage>
 			}
 		}
 
-		Log.Info( $"Read {_tokens.Length} tokens, {stringIndices.Length} strings, {fields.Length} fields, {fieldSets.Length} fieldSets, {_paths.Length} paths" );
+		Log.Info( $"Read {_tokens.Length} tokens, {stringIndices.Length} strings, {fields.Length} fields, {fieldSets.Length} fieldSets, {_paths.Length} paths, {_specs.Length} specs" );
 
 		return new UsdStage( [] );
 
@@ -126,7 +154,7 @@ public class UsdcReader : IFileReader<UsdStage>
 			_tokens[i] = tokenStream.ReadNullTerminatedString( tokenStream.Position );
 		}
 
-		Log.Info( $"Read {_tokens.Length} tokens" );
+		// Log.Info( $"Read {_tokens.Length} tokens" );
 	}
 
 	private uint[] ReadStringIndices( TocSection stringsSection, BinaryReader reader )
@@ -138,7 +166,7 @@ public class UsdcReader : IFileReader<UsdStage>
 			indices[i] = reader.ReadUInt32();
 		}
 
-		Log.Info( $"Read {indices.Length} string indices" );
+		// Log.Info( $"Read {indices.Length} string indices" );
 		return indices;
 	}
 
@@ -153,7 +181,7 @@ public class UsdcReader : IFileReader<UsdStage>
 		var indices = IntegerCoding<uint,int>.ReadCompressedInts( reader, numFields );
 		var values = IntegerCoding<ulong,long>.ReadCompressedInts( reader, numFields );
 		
-		Log.Info( $"Indices: {indices.Length}, values: {values.Length}" );
+		// Log.Info( $"Indices: {indices.Length}, values: {values.Length}" );
 		for ( int i = 0; i < fields.Length; i++ )
 		{
 			fields[i] = new Field { TokenIndex = indices[i], ValueRep = values[i] };
@@ -231,5 +259,32 @@ public class UsdcReader : IFileReader<UsdStage>
 			}
 			parentPath = _paths[pathIndex];
 		} while ( hasChild || hasSibling );
+	}
+
+	private void ReadSpecs( TocSection specsSection, BinaryReader reader )
+	{
+		reader.BaseStream.Position = (long)specsSection.Start;
+
+		var numSpecs = (int)reader.ReadUInt64();
+		_specs = new Spec[numSpecs];
+		
+		// Log.Info( $"0x{reader.BaseStream.Position:X8} numSpecs {numSpecs}" );
+
+		var pathIndices = IntegerCoding<uint, int>.ReadCompressedInts( reader, numSpecs );
+		// Log.Info( $"0x{reader.BaseStream.Position:X8} read {numSpecs} pathIndices" );
+		var fieldSetIndices = IntegerCoding<uint, int>.ReadCompressedInts( reader, numSpecs );
+		// Log.Info( $"0x{reader.BaseStream.Position:X8} read {numSpecs} fieldSetIndices" );
+		var specTypes = IntegerCoding<uint, int>.ReadCompressedInts( reader, numSpecs );
+		// Log.Info( $"0x{reader.BaseStream.Position:X8} read {numSpecs} specTypes" );
+
+		for ( int i = 0; i < numSpecs; i++ )
+		{
+			_specs[i] = new Spec
+			{
+				PathIndex = pathIndices[i],
+				FieldSetIndex = fieldSetIndices[i],
+				SpecType = (SdfSpecType)specTypes[i]
+			};
+		}
 	}
 }

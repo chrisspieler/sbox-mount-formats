@@ -33,7 +33,7 @@ public static class IntegerCoding<TInt, TSInt>
 		byte[] bytes = Compression.DecompressFromBuffer( reader, compressedSize, uncompressedSize );
 		return DecodeInts( bytes, elementCount );
 	}
-	public static TInt[] DecodeInts( byte[] data, int numInts )
+	private static TInt[] DecodeInts( byte[] data, int numInts )
 	{
 		var outputBytes = new byte[Marshal.SizeOf<TInt>() * numInts];
 
