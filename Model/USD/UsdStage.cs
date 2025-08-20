@@ -7,15 +7,52 @@ namespace Duccsoft.Formats.Usd;
 public class UsdStage
 {
 	public UsdStage( List<UsdPrim> prims )
-	{
+	{ 
 		_prims = prims;
+		PseudoRoot = prims.FirstOrDefault();
 	}
+	
+	public UsdStage( List<UsdPrim> prims, UsdPrim pseudoRoot )
+	{ 
+		_prims = prims;
+		PseudoRoot = pseudoRoot;
+	}
+
+	public UsdPrim PseudoRoot { get; }
 
 	public static UsdStage LoadFromFile( string filePath )
 	{
-		return Path.GetExtension( filePath ) == ".usda" 
-			? new UsdaReader().ReadFromPath( filePath ) 
-			: new UsdcReader().ReadFromPath( filePath );
+		if ( Path.GetExtension( filePath ) == ".usda" )
+			return new UsdaReader().ReadFromPath( filePath );
+
+		var crateFile = new SdfCrateFile();
+		crateFile.ReadFromPath( filePath );
+		var sdfLayer = SdfLayer.Load( crateFile );
+		return Open( sdfLayer );
+	}
+
+	public static UsdStage Open( SdfLayer rootLayer )
+	{
+		var primList = new List<UsdPrim>();
+		var pseudoRoot = ComposePrimRecursive( rootLayer.PseudoRoot );
+		return new UsdStage( primList, pseudoRoot );
+
+		UsdPrim ComposePrimRecursive( SdfPrimSpec spec )
+		{
+			var prim = new UsdPrim
+			{
+				Specifier = spec.Specifier,
+				Name = spec.Name
+			};
+
+			primList.Add( prim );
+			
+			foreach ( var child in spec.NameChildren )
+			{
+				prim.Children.Add( ComposePrimRecursive( child ) );
+			}
+			return prim;
+		}
 	}
 	
 	public IReadOnlyList<UsdPrim> Prims => _prims;

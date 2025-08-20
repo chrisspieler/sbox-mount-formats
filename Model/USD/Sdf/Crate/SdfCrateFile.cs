@@ -4,53 +4,41 @@ using Sandbox.Diagnostics;
 
 namespace Duccsoft.Formats.Usd.Crate;
 
-public class UsdcReader : IFileReader<UsdStage>
+public class SdfCrateFile : IFileReader<SdfLayer>
 {
 	public static readonly byte[] UsdcMagic = "PXR-USDC"u8.ToArray();
 
-	private record TocSection( string Name, ulong Start, ulong End );
+	public record TocSection( string Name, ulong Start, ulong End );
 
-	private struct Field
+	public struct Field
 	{
 		public uint TokenIndex;
 		public ulong ValueRep;
 	}
 
-	private enum SdfSpecType : uint
-	{
-		SdfSpecTypeUnknown = 0,
-		SdfSpecTypeAttribute,
-		SdfSpecTypeConnection,
-		SdfSpecTypeExpression,
-		SdfSpecTypeMapper,
-		SdfSpecTypeMapperArg,
-		SdfSpecTypePrim,
-		SdfSpecTypePseudoRoot,
-		SdfSpecTypeRelationship,
-		SdfSpecTypeRelationshipTarget,
-		SdfSpecTypeVariant,
-		SdfSpecTypeVariantSet
-	}
-
-	private struct Spec
+	public struct Spec
 	{
 		public uint PathIndex;
 		public uint FieldSetIndex;
 		public SdfSpecType SpecType;
 	}
 
-	private SdfPath[] _paths = [];
-	private TfToken[] _tokens = [];
-	private Spec[] _specs = [];
+	public TocSection[] Sections { get; private set; } = [];
+	public TfToken[] Tokens { get; private set; } = [];
+	public uint[] StringIndices { get; private set; } = [];
+	public Field[] Fields { get; private set; } = [];
+	public uint[] FieldSets { get; private set; } = [];
+	public SdfPath[] Paths { get; private set; } = [];
+	public Spec[] Specs { get; private set; } = [];
 
-	public UsdStage ReadFromPath( string filePath )
+	public SdfLayer ReadFromPath( string filePath )
 	{
 		var bytes = File.ReadAllBytes( filePath );
 		Log.Info( $"Read {bytes.Length.FormatBytes()} file: {filePath}" );
 		return ReadFromBytes( bytes );
 	}
 
-	public UsdStage ReadFromBytes( byte[] bytes )
+	public SdfLayer ReadFromBytes( byte[] bytes )
 	{
 		var reader = new BinaryReader( new MemoryStream( bytes ) );
 		Assert.True( reader.ReadBytes( 8 ).SequenceEqual( UsdcMagic ), "Invalid USDC magic" );
@@ -64,20 +52,16 @@ public class UsdcReader : IFileReader<UsdStage>
 		var tocOffset = reader.ReadUInt64();
 		reader.BaseStream.Position = (long)tocOffset;
 
-		var sections = new TocSection[reader.ReadUInt64()];
-		for ( int i = 0; i < sections.Length; i++ )
+		Sections = new TocSection[reader.ReadUInt64()];
+		for ( int i = 0; i < Sections.Length; i++ )
 		{
 			var section = ReadTocSection();
-			sections[i] = section;
+			Sections[i] = section;
 
-			// Log.Info( $"Section #{i} \"{sections[i].Name}\" from 0x{sections[i].Start:X8} to 0x{sections[i].End:X8}" );
+			// Log.Info( $"Section #{i} \"{Sections[i].Name}\" from 0x{Sections[i].Start:X8} to 0x{Sections[i].End:X8}" );
 		}
-		
-		var stringIndices = Array.Empty<uint>();
-		var fields = Array.Empty<Field>();
-		Span<uint> fieldSets = [];
 
-		foreach ( var section in sections )
+		foreach ( var section in Sections )
 		{
 			switch ( section.Name )
 			{
@@ -85,13 +69,13 @@ public class UsdcReader : IFileReader<UsdStage>
 					ReadTokens( section, reader );
 					break;
 				case "STRINGS":
-					stringIndices = ReadStringIndices( section, reader );
+					ReadStringIndices( section, reader );
 					break;
 				case "FIELDS":
-					fields = ReadFields( section, reader );
+					ReadFields( section, reader );
 					break;
 				case "FIELDSETS":
-					fieldSets = ReadFieldSets( section, reader );
+					ReadFieldSets( section, reader );
 					// foreach ( var fieldSet in fieldSets )
 					// {
 					// 	Log.Info( $"Field set idx: {fieldSet}" );
@@ -117,9 +101,9 @@ public class UsdcReader : IFileReader<UsdStage>
 			}
 		}
 
-		Log.Info( $"Read {_tokens.Length} tokens, {stringIndices.Length} strings, {fields.Length} fields, {fieldSets.Length} fieldSets, {_paths.Length} paths, {_specs.Length} specs" );
+		Log.Info( $"Read {Tokens.Length} tokens, {StringIndices.Length} strings, {Fields.Length} fields, {FieldSets.Length} fieldSets, {Paths.Length} paths, {Specs.Length} specs" );
 
-		return new UsdStage( [] );
+		return new SdfLayer();
 
 		TocSection ReadTocSection() => new TocSection(
 			Name: ReadNullTerminatedString( 16 ),
@@ -148,54 +132,52 @@ public class UsdcReader : IFileReader<UsdStage>
 		Assert.True( uncompressed[^1] == 0x0, "The byte of token data must be null" );
 
 		var tokenStream = new MemoryStream( uncompressed );
-		_tokens = new TfToken[numTokens];
+		Tokens = new TfToken[numTokens];
 		for ( ulong i = 0; i < numTokens; i++ )
 		{
-			_tokens[i] = tokenStream.ReadNullTerminatedString( tokenStream.Position );
+			Tokens[i] = tokenStream.ReadNullTerminatedString( tokenStream.Position );
 		}
 
 		// Log.Info( $"Read {_tokens.Length} tokens" );
 	}
 
-	private uint[] ReadStringIndices( TocSection stringsSection, BinaryReader reader )
+	private void ReadStringIndices( TocSection stringsSection, BinaryReader reader )
 	{
 		reader.BaseStream.Position = (long)stringsSection.Start;
-		var indices = new uint[reader.ReadUInt64()];
-		for ( int i = 0; i < indices.Length; i++ )
+		StringIndices = new uint[reader.ReadUInt64()];
+		for ( int i = 0; i < StringIndices.Length; i++ )
 		{
-			indices[i] = reader.ReadUInt32();
+			StringIndices[i] = reader.ReadUInt32();
 		}
 
-		// Log.Info( $"Read {indices.Length} string indices" );
-		return indices;
+		// Log.Info( $"Read {StringIndices.Length} string indices" );
 	}
 
-	private Field[] ReadFields( TocSection fieldsSection, BinaryReader reader )
+	private void ReadFields( TocSection fieldsSection, BinaryReader reader )
 	{
 		reader.BaseStream.Position = (long)fieldsSection.Start;
 
 		var numFields = (int)reader.ReadUInt64();
 		// Log.Info( $"0x{reader.BaseStream.Position:X8} numFields: {numFields}" );
-		var fields = new Field[numFields];
+		Fields = new Field[numFields];
 		
 		var indices = IntegerCoding<uint,int>.ReadCompressedInts( reader, numFields );
 		var values = IntegerCoding<ulong,long>.ReadCompressedInts( reader, numFields );
 		
 		// Log.Info( $"Indices: {indices.Length}, values: {values.Length}" );
-		for ( int i = 0; i < fields.Length; i++ )
+		for ( int i = 0; i < Fields.Length; i++ )
 		{
-			fields[i] = new Field { TokenIndex = indices[i], ValueRep = values[i] };
-			// Log.Info( $"field {fields[i].TokenIndex} {fields[i].ValueRep}" );
+			Fields[i] = new Field { TokenIndex = indices[i], ValueRep = values[i] };
+			// Log.Info( $"field {Fields[i].TokenIndex} {Fields[i].ValueRep}" );
 		}
-		return fields;
 	}
 
-	private Span<uint> ReadFieldSets( TocSection fieldSetSection, BinaryReader reader )
+	private void ReadFieldSets( TocSection fieldSetSection, BinaryReader reader )
 	{
 		reader.BaseStream.Position = (long)fieldSetSection.Start;
 
 		var numFieldSets = (int)reader.ReadUInt64();
-		return IntegerCoding<uint, int>.ReadCompressedInts( reader, numFieldSets );
+		FieldSets = IntegerCoding<uint, int>.ReadCompressedInts( reader, numFieldSets ).ToArray();
 	}
 
 	private void ReadPaths( TocSection pathsSection, BinaryReader reader )
@@ -206,7 +188,7 @@ public class UsdcReader : IFileReader<UsdStage>
 		// For some reason, the number of paths is stored a second time? Freak out if this assumption doesn't hold.
 		Assert.AreEqual( numPaths, (int)reader.ReadUInt64(), "Second numPaths was different from first." );
 
-		_paths = new SdfPath[numPaths];
+		Paths = new SdfPath[numPaths];
 		
 		var pathIndices = IntegerCoding<uint, int>.ReadCompressedInts( reader, numPaths );
 		var elementTokenIndices = IntegerCoding<int, int>.ReadCompressedInts( reader, numPaths );
@@ -234,14 +216,14 @@ public class UsdcReader : IFileReader<UsdStage>
 			if ( parentPath.IsEmpty() )
 			{
 				parentPath = SdfPath.AbsoluteRootPath();
-				_paths[pathIndex] = parentPath;
+				Paths[pathIndex] = parentPath;
 			}
 			else
 			{
 				var isPrimPropertyPath = elementTokenIndices[thisIndex] < 0;
 				var tokenIndex = Math.Abs( elementTokenIndices[thisIndex] );
-				var elemToken = _tokens[tokenIndex];
-				_paths[pathIndex] = isPrimPropertyPath
+				var elemToken = Tokens[tokenIndex];
+				Paths[pathIndex] = isPrimPropertyPath
 					? parentPath.AppendProperty( elemToken )
 					: parentPath.AppendElementToken( elemToken );
 			}
@@ -257,7 +239,7 @@ public class UsdcReader : IFileReader<UsdStage>
 				var siblingIndex = thisIndex + jumps[thisIndex];
 				BuildPaths( pathIndices, elementTokenIndices, jumps, siblingIndex, parentPath );
 			}
-			parentPath = _paths[pathIndex];
+			parentPath = Paths[pathIndex];
 		} while ( hasChild || hasSibling );
 	}
 
@@ -266,7 +248,7 @@ public class UsdcReader : IFileReader<UsdStage>
 		reader.BaseStream.Position = (long)specsSection.Start;
 
 		var numSpecs = (int)reader.ReadUInt64();
-		_specs = new Spec[numSpecs];
+		Specs = new Spec[numSpecs];
 		
 		// Log.Info( $"0x{reader.BaseStream.Position:X8} numSpecs {numSpecs}" );
 
@@ -279,7 +261,7 @@ public class UsdcReader : IFileReader<UsdStage>
 
 		for ( int i = 0; i < numSpecs; i++ )
 		{
-			_specs[i] = new Spec
+			Specs[i] = new Spec
 			{
 				PathIndex = pathIndices[i],
 				FieldSetIndex = fieldSetIndices[i],

@@ -48,8 +48,8 @@ public class SdfPath
 	}
 	
 	public static SdfPath AbsoluteRootPath() => new SdfPath( "/" );
-	public SdfPath AppendElementToken( TfToken elementTok ) => new SdfPath( _path + "/" + elementTok );
-	public SdfPath AppendProperty( TfToken propName ) => new SdfPath( _path + "." + propName );
+	public SdfPath AppendElementToken( TfToken elementTok ) => new SdfPath( _path?.TrimEnd( '/' ) + "/" + elementTok );
+	public SdfPath AppendProperty( TfToken propName ) => new SdfPath( _path?.TrimEnd( '/' ) + "." + propName );
 
 	public string GetAsString() => _path;
 
