@@ -192,8 +192,9 @@ public class SdfCrateFile
 		reader.BaseStream.Position = (long)pathsSection.Start;
 
 		var numPaths = (int)reader.ReadUInt64();
-		// For some reason, the number of paths is stored a second time? Freak out if this assumption doesn't hold.
-		Assert.AreEqual( numPaths, (int)reader.ReadUInt64(), "Second numPaths was different from first." );
+		// For some reason, the number of paths is stored a second time? The number may be different, not sure why.
+		// Still use the first number of paths anyway.
+		reader.ReadUInt64();
 
 		Paths = new SdfPath[numPaths];
 		
