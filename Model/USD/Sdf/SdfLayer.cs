@@ -36,6 +36,7 @@ public class SdfLayer
 					layer._directory[path] = child;
 					break;
 				default:
+					Log.Info( $"Unhandled spec type: {spec.SpecType}" );
 					break;
 			}
 		}
