@@ -4,9 +4,17 @@ using Sandbox.Diagnostics;
 
 namespace Duccsoft.Formats.Usd.Crate;
 
-public class SdfCrateFile : IFileReader<SdfLayer>
+public class SdfCrateFile
 {
+	private SdfCrateFile() { }
+
+	public SdfCrateFile( byte[] bytes )
+	{
+		ReadFromBytes( bytes );
+	}
+
 	public static readonly byte[] UsdcMagic = "PXR-USDC"u8.ToArray();
+
 
 	public record TocSection( string Name, ulong Start, ulong End );
 
@@ -31,14 +39,14 @@ public class SdfCrateFile : IFileReader<SdfLayer>
 	public SdfPath[] Paths { get; private set; } = [];
 	public Spec[] Specs { get; private set; } = [];
 
-	public SdfLayer ReadFromPath( string filePath )
+	public static SdfCrateFile ReadFromPath( string filePath )
 	{
 		var bytes = File.ReadAllBytes( filePath );
 		Log.Info( $"Read {bytes.Length.FormatBytes()} file: {filePath}" );
-		return ReadFromBytes( bytes );
+		return new SdfCrateFile( bytes );
 	}
 
-	public SdfLayer ReadFromBytes( byte[] bytes )
+	private void ReadFromBytes( byte[] bytes )
 	{
 		var reader = new BinaryReader( new MemoryStream( bytes ) );
 		Assert.True( reader.ReadBytes( 8 ).SequenceEqual( UsdcMagic ), "Invalid USDC magic" );
@@ -102,8 +110,7 @@ public class SdfCrateFile : IFileReader<SdfLayer>
 		}
 
 		Log.Info( $"Read {Tokens.Length} tokens, {StringIndices.Length} strings, {Fields.Length} fields, {FieldSets.Length} fieldSets, {Paths.Length} paths, {Specs.Length} specs" );
-
-		return new SdfLayer();
+		return;
 
 		TocSection ReadTocSection() => new TocSection(
 			Name: ReadNullTerminatedString( 16 ),

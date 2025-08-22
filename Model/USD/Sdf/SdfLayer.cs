@@ -7,15 +7,18 @@ public class SdfLayer
 	public SdfLayer()
 	{
 		PseudoRoot = new SdfPrimSpec( this );
+		Log.Info( $"Add PseudoRoot: {PseudoRoot.Path}" );
+		_directory[PseudoRoot.Path] = PseudoRoot;
 	}
 
 	public SdfPrimSpec PseudoRoot { get; }
-	
 
-	private Dictionary<SdfPath, SdfSpec> _directory;
 
-	public static SdfLayer Load( SdfCrateFile crateFile )
+	private readonly Dictionary<SdfPath, SdfSpec> _directory = [];
+
+	public static SdfLayer Load( string crateFilePath )
 	{
+		var crateFile = SdfCrateFile.ReadFromPath( crateFilePath );
 		var layer = new SdfLayer();
 
 		foreach ( var spec in crateFile.Specs )
@@ -26,6 +29,11 @@ public class SdfLayer
 			switch ( spec.SpecType )
 			{
 				case SdfSpecType.SdfSpecTypePrim:
+					var parentPath = path.GetParentPath();
+					Log.Info( $"\"{path}\" parent path: \"{parentPath}\", path count: {layer._directory.Count}" );
+					var parent = layer._directory[parentPath] as SdfPrimSpec;
+					var child = SdfPrimSpec.New( parent, path.GetName(), SdfSpecifier.SdfSpecifierDef );
+					layer._directory[path] = child;
 					break;
 				default:
 					break;

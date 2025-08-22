@@ -13,16 +13,16 @@ public class SdfPrimSpec : SdfSpec
 	internal SdfPrimSpec( SdfLayer layer ) : base( layer, SdfPath.AbsoluteRootPath(), SdfSpecType.SdfSpecTypePseudoRoot )
 	{
 		
+		NameToken = "/";
 		NameParent = this;
 		Specifier = SdfSpecifier.SdfSpecifierDef;
-		NameToken = "/";
 	}
 
 	internal SdfPrimSpec( SdfPrimSpec parent, string name, SdfSpecifier spec ) : base(parent.Layer, parent.Path.AppendElementToken( name ), SdfSpecType.SdfSpecTypePrim )
 	{
+		NameToken = name;
 		NameParent = parent;
 		Specifier = spec;
-		NameToken = name;
 	}
 
 	public string Name => NameToken.GetText();
@@ -52,6 +52,10 @@ public class SdfPrimSpec : SdfSpec
 	{
 		if ( index > _nameChildren.Count )
 			return false;
+
+		// Was this already added?
+		if ( _nameChildren.Any( c => c.Name == child.Name ) )
+			return true;
 		
 		_nameChildren.Insert( Math.Max( 0, index ), child );
 		return true;
