@@ -1,39 +1,23 @@
 ﻿using System.IO;
 using Duccsoft.Formats.Usd.Ascii;
-using Duccsoft.Formats.Usd.Crate;
 
 namespace Duccsoft.Formats.Usd;
 
 public class UsdStage
 {
+	// TODO: Remove this - it's used only by the old USDA parser.
 	public UsdStage( List<UsdPrim> prims )
 	{ 
 		_prims = prims;
 		PseudoRoot = prims.FirstOrDefault();
 	}
 	
-	public UsdStage( List<UsdPrim> prims, UsdPrim pseudoRoot )
+	public UsdStage( SdfLayer rootLayer )
 	{ 
-		_prims = prims;
-		PseudoRoot = pseudoRoot;
-	}
-
-	public UsdPrim PseudoRoot { get; }
-
-	public static UsdStage LoadFromFile( string filePath )
-	{
-		if ( Path.GetExtension( filePath ) == ".usda" )
-			return new UsdaReader().ReadFromPath( filePath );
-
-		var sdfLayer = SdfLayer.CreateNew( filePath );
-		return Open( sdfLayer );
-	}
-
-	public static UsdStage Open( SdfLayer rootLayer )
-	{
-		var primList = new List<UsdPrim>();
-		var pseudoRoot = ComposePrimRecursive( rootLayer.PseudoRoot );
-		return new UsdStage( primList, pseudoRoot );
+		_prims = new List<UsdPrim>();
+		PseudoRoot = ComposePrimRecursive( rootLayer.PseudoRoot );
+		RootLayer = rootLayer;
+		return;
 
 		UsdPrim ComposePrimRecursive( SdfPrimSpec spec )
 		{
@@ -43,7 +27,7 @@ public class UsdStage
 				Name = spec.Name
 			};
 
-			primList.Add( prim );
+			_prims.Add( prim );
 			
 			foreach ( var child in spec.NameChildren )
 			{
@@ -52,6 +36,21 @@ public class UsdStage
 			return prim;
 		}
 	}
+	
+	public UsdPrim PseudoRoot { get; }
+	public SdfLayer RootLayer { get; }
+
+	public static UsdStage Open( string filePath )
+	{
+		// TODO: Remove this after implementing SdfUsdaFileFormat
+		if ( Path.GetExtension( filePath ) == ".usda" )
+			return new UsdaReader().ReadFromPath( filePath );
+
+		var sdfLayer = SdfLayer.CreateNew( filePath );
+		return Open( sdfLayer );
+	}
+
+	public static UsdStage Open( SdfLayer rootLayer ) => new( rootLayer );
 	
 	public IReadOnlyList<UsdPrim> Prims => _prims;
 	private readonly List<UsdPrim> _prims;
