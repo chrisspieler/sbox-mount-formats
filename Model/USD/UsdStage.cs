@@ -25,7 +25,7 @@ public class UsdStage
 		if ( Path.GetExtension( filePath ) == ".usda" )
 			return new UsdaReader().ReadFromPath( filePath );
 
-		var sdfLayer = SdfLayer.Load( filePath );
+		var sdfLayer = SdfLayer.CreateNew( filePath );
 		return Open( sdfLayer );
 	}
 

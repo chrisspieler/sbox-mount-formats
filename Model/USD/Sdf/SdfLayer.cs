@@ -1,48 +1,80 @@
-﻿using Duccsoft.Formats.Usd.Crate;
+﻿using System;
+using System.IO;
+using Duccsoft.Formats.Usd.Ascii;
+using Duccsoft.Formats.Usd.Crate;
+using Sandbox.Diagnostics;
 
 namespace Duccsoft.Formats.Usd;
 
+using FileFormatArguments = System.Collections.Generic.Dictionary<string,string>;
+
 public class SdfLayer
 {
-	public SdfLayer()
+	private SdfLayer( ISdfFileFormat fileFormat, string identifier, string realPath = null, FileFormatArguments args = null )
 	{
+		// TODO: Assert not null? What's the real path?
+		realPath ??= identifier;
+		
 		PseudoRoot = new SdfPrimSpec( this );
-		Log.Info( $"Add PseudoRoot: {PseudoRoot.Path}" );
 		_directory[PseudoRoot.Path] = PseudoRoot;
 	}
 
+	public ISdfFileFormat FileFormat { get; }
+	public FileFormatArguments FileFormatArguments { get; }
 	public SdfPrimSpec PseudoRoot { get; }
 
 
-	private readonly Dictionary<SdfPath, SdfSpec> _directory = [];
+	// TODO: Make this private.
+	public readonly Dictionary<SdfPath, SdfSpec> _directory = [];
 
-	public static SdfLayer Load( string crateFilePath )
+	public static SdfLayer CreateNew( string identifier, FileFormatArguments args = null ) 
+		=> CreateNew( null, identifier, args );
+
+	public static SdfLayer CreateNew( ISdfFileFormat fileFormat, string identifier, FileFormatArguments args = null )
 	{
-		var crateFile = SdfCrateFile.ReadFromPath( crateFilePath );
-		var layer = new SdfLayer();
+		if ( !SplitIdentifier( identifier, out var path, out var idArgs ) )
+			throw new ArgumentException( $"Unable to split identifier: {identifier}", nameof(identifier) );
 
-		foreach ( var spec in crateFile.Specs )
+		args ??= new FileFormatArguments();
+		foreach ( var (key, value) in idArgs )
 		{
-			var path = crateFile.Paths[spec.PathIndex];
-			var fieldSet = crateFile.FieldSets[spec.FieldSetIndex];
-			Log.Info( $"{path} {spec.SpecType} {fieldSet}" );
-			switch ( spec.SpecType )
-			{
-				case SdfSpecType.SdfSpecTypePrim:
-					var parentPath = path.GetParentPath();
-					Log.Info( $"\"{path}\" parent path: \"{parentPath}\", path count: {layer._directory.Count}" );
-					var parent = layer._directory[parentPath] as SdfPrimSpec;
-					var child = SdfPrimSpec.New( parent, path.GetName(), SdfSpecifier.SdfSpecifierDef );
-					layer._directory[path] = child;
-					break;
-				default:
-					Log.Info( $"Unhandled spec type: {spec.SpecType}" );
-					break;
-			}
+			// TODO: Verify whether the args in the identifier should override the args in the method parameter. 
+			args.TryAdd( key, value );
 		}
+		
+		// If no file format was given, infer it from the identifier info.
+		fileFormat ??= GetFileFormat( path, args );
 
-		return layer;
+		Assert.NotNull( fileFormat, $"Unable to find suitable file format for identifier: {identifier}" );
+
+		// TODO: Look up the real path that the identifier path should have resolved to.
+		return new SdfLayer( fileFormat, identifier, path, args );
 	}
+
+	private static ISdfFileFormat GetFileFormat( string path, FileFormatArguments args )
+	{
+		var extension = Path.GetExtension( path );
+		// TODO: Create a static registry of ISdfFileFormat instances, and check the supported extensions of each.
+		return extension switch
+		{
+			".usdc" => new SdfUsdcFileFormat(),
+			".usda" => new SdfUsdaFileFormat(),
+			_ => null
+		};
+	}
+
+	// TODO: Actually create an identifier.
+	public static string CreateIdentifier( string layerPath, FileFormatArguments args ) => layerPath;
+
+	// TODO: Actually parse an identifier.
+	public static bool SplitIdentifier( string identifier, out string layerPath, out FileFormatArguments args )
+	{
+		args = null;
+		layerPath = identifier;
+		return true;
+	}
+
+	public SdfSpec GetObjectAtPath( SdfPath path ) => _directory.GetValueOrDefault( path );
 
 	public bool HasSpec( SdfPath path ) => _directory.TryGetValue( path, out var spec ) && spec is not null;
 	public SdfSpecType GetSpecType( SdfPath path )
